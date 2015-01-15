@@ -40,7 +40,7 @@ from IPython.display import HTML
 
 # <codecell>
 
-con_str = 'HIDDEN' #Enter connection string here
+con_str = 'HIDDEN'
 
 conn = psycopg2.connect(con_str)
 cur = conn.cursor()
@@ -169,20 +169,16 @@ raw_data['flags'] = range_flags
 raw_data['raw'] = arr['obs_val']
 
 raw_df = pd.DataFrame(raw_data, index=raw_data['time'])
-fig, ax = plt.subplots(3,1,figsize=(12, 21))
-raw_df['flags'].plot(ax=ax[0], color='k', title='Gross Range QC Flag', ylim=[0,5])
-raw_df['raw'].plot(ax=ax[1], color='r', title='sea_surface_wave_significant_height - RAW')
+fig, ax = plt.subplots(2,1,figsize=(16, 12))
+flags = raw_df['flags'].plot(ax=ax[0], color='k', title='Gross Range QC Flag', ylim=[0,5])
+raw = raw_df['raw'].plot(ax=ax[1], color='b')
+flags.set_ylabel("QC Flag")
+raw.set_ylabel("sea_surface_wave_significant_height (m)")
 
-good_data = np.where(range_flags == 1)
-qc_data = {}
-qc_data['time'] = arr['timestamp'][good_data]
-qc_data['qc'] = arr['obs_val'][good_data]
-qc_df = pd.DataFrame(qc_data, index=qc_data['time'])
-qc_df['qc'].plot(ax=ax[2], color='b', title='sea_surface_wave_significant_height - QC', ylim=[0,1])
+bad_data = np.where(range_flags == 4)
 
-# <markdowncell>
-
-# #### Note that the QC data does not contain values over 0.8
+bad_handle = ax[1].plot(arr['timestamp'][bad_data], arr['obs_val'][bad_data], 'rd')
+plt.legend(['raw', 'BAD_DATA'])
 
 # <markdowncell>
 
@@ -194,45 +190,37 @@ qc_df['qc'].plot(ax=ax[2], color='b', title='sea_surface_wave_significant_height
 
 warning_threshold = 0.15
 bad_threshold = 0.5
-spike_flags = qc.spike_check(arr['obs_val'], warning_threshold, bad_threshold)
+spike_flags = qc.spike_check(arr['obs_val'][0:500], warning_threshold, bad_threshold)
 
 # <markdowncell>
 
 # ### Plot the flag values to see if any are suspect...
-# #### Then plot the raw and qc'ed time series data, zooming in on the first 'suspect data'
+# #### Then plot the raw and qc'ed time series data, zooming in on the first 500 points
 
 # <codecell>
 
 # Create a pandas dataframe to store and plot the data
 raw_data = {}
-raw_data['time'] = arr['timestamp']
+raw_data['time'] = arr['timestamp'][0:500]
 raw_data['flags'] = spike_flags
-raw_data['raw'] = arr['obs_val']
+raw_data['raw'] = arr['obs_val'][0:500]
 
 raw_df = pd.DataFrame(raw_data, index=raw_data['time'])
-fig, ax = plt.subplots(3,1,figsize=(12, 21))
+fig, ax = plt.subplots(2,1,figsize=(16, 12))
 raw_df['flags'].plot(ax=ax[0], color='k', title='Spike Test QC Flag', ylim=[0,5])
 
-
 good_data = np.where(spike_flags == 1)
-bad_data = np.where(spike_flags == 3)
+suspect_data = np.where(spike_flags == 3)
 
-start = bad_data[0][0]-25
-stop = bad_data[0][0]+25
+raw = raw_df['raw'].plot(ax=ax[1], color='b')
+raw.set_ylabel("sea_surface_wave_significant_height (m)")
 
-# Zoom in on the first 'suspect data'
-raw_df['raw'][start:stop].plot(ax=ax[1], color='r', marker='o', title='sea_surface_wave_significant_height - RAW')
-qc_data = {}
-qc_data['time'] = arr['timestamp'][good_data]
-qc_data['qc'] = arr['obs_val'][good_data]
-qc_df = pd.DataFrame(qc_data, index=qc_data['time'])
-qc_df['qc'][start:stop-1].plot(ax=ax[2], color='b', marker='o', title='sea_surface_wave_significant_height - QC', ylim=[0, 0.4])
+bad_handle = ax[1].plot(raw_data['time'][suspect_data], raw_data['raw'][suspect_data], 'rd')
+plt.legend(['raw', 'SUSPECT_DATA'])
 
 # <markdowncell>
 
 # #### From the plots, you can see some of the data exceeded the 'suspect' data thresold, hence the qc flag values of 3
-# 
-# #### You can see the spike absent from the zoomed in QC plot when the suspect data is removed.
 
 # <markdowncell>
 
@@ -241,7 +229,8 @@ qc_df['qc'][start:stop-1].plot(ax=ax[2], color='b', marker='o', title='sea_surfa
 
 # <codecell>
 
-rep_flags = qc.flat_line_check(arr['obs_val'], 3, 5, 0.001)
+tolerance = 0.001  
+rep_flags = qc.flat_line_check(arr['obs_val'][1350:1550], 2, 5, tolerance)
 
 # <markdowncell>
 
@@ -252,31 +241,31 @@ rep_flags = qc.flat_line_check(arr['obs_val'], 3, 5, 0.001)
 
 # Create a pandas dataframe to store and plot the data
 raw_data = {}
-raw_data['time'] = arr['timestamp']
+raw_data['time'] = arr['timestamp'][1350:1550]
 raw_data['flags'] = rep_flags
-raw_data['raw'] = arr['obs_val']
+raw_data['raw'] = arr['obs_val'][1350:1550]
 
 raw_df = pd.DataFrame(raw_data, index=raw_data['time'])
-fig, ax = plt.subplots(3,1,figsize=(12, 21))
+fig, ax = plt.subplots(2,1,figsize=(16, 12))
 raw_df['flags'].plot(ax=ax[0], color='k', title='Flat Line Test QC Flag', ylim=[0,5])
 
 good_data = np.where(rep_flags == 1)
 bad_data = np.where(rep_flags == 4)
-
-start = bad_data[0][0]-25
-stop = bad_data[0][0]+25
+suspect_data = np.where(rep_flags == 3)
 
 # Only plot the data near the suspect data to show the flat line
-raw_df['raw'][start:stop].plot(ax=ax[1], color='r', marker='o', title='sea_surface_wave_significant_height - RAW')
-qc_data = {}
-qc_data['time'] = arr['timestamp'][good_data]
-qc_data['qc'] = arr['obs_val'][good_data]
-qc_df = pd.DataFrame(qc_data, index=qc_data['time'])
-qc_df['qc'][start-2:stop-5].plot(ax=ax[2], color='b', marker='o', title='sea_surface_wave_significant_height - QC')
+ax[1].plot(raw_data['time'], raw_data['raw'], 'b')
+ax[1].plot(raw_data['time'][bad_data], raw_data['raw'][bad_data], 'rd')
+ax[1].plot(raw_data['time'][suspect_data], raw_data['raw'][suspect_data], 'kd')
+
+ax[1].set_ylabel("sea_surface_wave_significant_height (m)")
+plt.legend(['raw', 'BAD_DATA', 'SUSPECT_DATA'])
+print raw_data['raw'][suspect_data]
+plt.show()
 
 # <markdowncell>
 
-# #### The Flat line QC test removed 2 data points from the flat line data around 12:00 on Sep 29
+# #### The Flat line QC test identified some 'BAD' flat line data around 12:00 on Sep 29
 
 # <codecell>
 
